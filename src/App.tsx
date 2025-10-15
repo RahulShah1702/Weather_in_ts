@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, CloudRain, Sun, Wind, Droplets, Eye, Gauge, MapPin, Search, Clock, Star, Trash2 } from 'lucide-react';
+import { Cloud, CloudRain, Sun, Wind, Droplets, Eye, Gauge, MapPin, Search, Clock, Star, Trash2, Calendar, CloudSnow, CloudDrizzle } from 'lucide-react';
 
 interface WeatherData {
   location: string;
@@ -14,6 +14,15 @@ interface WeatherData {
   longitude: number;
 }
 
+interface ForecastDay {
+  date: string;
+  dayName: string;
+  maxTemp: number;
+  minTemp: number;
+  condition: string;
+  weatherCode: number;
+}
+
 interface SavedLocation {
   name: string;
   latitude: number;
@@ -23,6 +32,7 @@ interface SavedLocation {
 const WeatherApp: React.FC = () => {
   const [city, setCity] = useState<string>('');
   const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [forecast, setForecast] = useState<ForecastDay[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
@@ -30,7 +40,6 @@ const WeatherApp: React.FC = () => {
   const [gettingLocation, setGettingLocation] = useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
-  // Load saved locations from memory on mount
   useEffect(() => {
     const saved = [
       { name: 'Mumbai', latitude: 19.0760, longitude: 72.8777 },
@@ -46,7 +55,7 @@ const WeatherApp: React.FC = () => {
     
     try {
       const response = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,surface_pressure,weather_code&timezone=auto`
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,surface_pressure,weather_code&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto`
       );
       
       if (!response.ok) throw new Error('Failed to fetch weather data');
@@ -68,7 +77,18 @@ const WeatherApp: React.FC = () => {
         latitude: lat,
         longitude: lon
       });
+
+      // Process 7-day forecast
+      const forecastData: ForecastDay[] = data.daily.time.slice(1, 8).map((date: string, idx: number) => ({
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        dayName: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
+        maxTemp: Math.round(data.daily.temperature_2m_max[idx + 1]),
+        minTemp: Math.round(data.daily.temperature_2m_min[idx + 1]),
+        condition: getWeatherCondition(data.daily.weather_code[idx + 1]),
+        weatherCode: data.daily.weather_code[idx + 1]
+      }));
       
+      setForecast(forecastData);
       setLastUpdated(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
       setError('Unable to fetch weather data. Please try again.');
@@ -105,7 +125,6 @@ const WeatherApp: React.FC = () => {
       (error) => {
         setError('Unable to get your location. Please enable location services.');
         setGettingLocation(false);
-        // Fallback to Mumbai
         fetchWeather(19.0760, 72.8777, 'Mumbai');
       }
     );
@@ -175,23 +194,36 @@ const WeatherApp: React.FC = () => {
     setShowSaved(false);
   };
 
-  const getWeatherIcon = (condition: string) => {
+  const getWeatherIcon = (condition: string, size: string = 'w-24 h-24') => {
     const lower = condition.toLowerCase();
-    if (lower.includes('rain') || lower.includes('thunder')) return <CloudRain className="w-24 h-24 animate-pulse" />;
-    if (lower.includes('cloud') || lower.includes('fog')) return <Cloud className="w-24 h-24" />;
-    return <Sun className="w-24 h-24 animate-spin" style={{ animationDuration: '20s' }} />;
+    if (lower.includes('snow')) return <CloudSnow className={`${size} animate-pulse`} />;
+    if (lower.includes('rain') || lower.includes('drizzle')) return <CloudRain className={`${size} animate-pulse`} />;
+    if (lower.includes('thunder')) return <CloudRain className={`${size} animate-pulse`} />;
+    if (lower.includes('cloud') || lower.includes('fog')) return <Cloud className={size} />;
+    return <Sun className={size} style={{ animation: 'spin 20s linear infinite' }} />;
+  };
+
+  const getForecastIcon = (code: number) => {
+    if (code === 0) return <Sun className="w-8 h-8" />;
+    if (code <= 3) return <Cloud className="w-8 h-8" />;
+    if (code <= 48) return <Cloud className="w-8 h-8 opacity-70" />;
+    if (code <= 67) return <CloudRain className="w-8 h-8" />;
+    if (code <= 77) return <CloudSnow className="w-8 h-8" />;
+    if (code <= 99) return <CloudRain className="w-8 h-8" />;
+    return <Cloud className="w-8 h-8" />;
   };
 
   const getBackgroundGradient = (condition: string) => {
     const lower = condition.toLowerCase();
     if (lower.includes('rain') || lower.includes('thunder')) return 'from-gray-600 via-gray-700 to-gray-800';
     if (lower.includes('cloud')) return 'from-blue-400 via-blue-500 to-blue-600';
+    if (lower.includes('snow')) return 'from-blue-300 via-blue-400 to-blue-500';
     return 'from-orange-400 via-amber-500 to-yellow-500';
   };
 
   return (
     <div className={`min-h-screen bg-gradient-to-br ${weather ? getBackgroundGradient(weather.condition) : 'from-blue-400 via-blue-500 to-blue-600'} p-4 flex items-center justify-center transition-all duration-1000`}>
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-4xl">
         <div className="bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl p-8 text-white">
           <div className="flex justify-between items-center mb-8">
             <h1 className="text-4xl font-bold">Weather Dashboard</h1>
@@ -331,6 +363,35 @@ const WeatherApp: React.FC = () => {
                     <div className="text-sm opacity-75">Pressure</div>
                     <div className="text-2xl font-semibold">{weather.pressure} hPa</div>
                   </div>
+                </div>
+              </div>
+
+              {/* 7-Day Forecast */}
+              <div className="mt-8">
+                <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                  <Calendar className="w-6 h-6" />
+                  7-Day Forecast
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {forecast.map((day, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-white/10 backdrop-blur-sm rounded-xl p-4 hover:bg-white/20 transition-all hover:scale-105 cursor-pointer"
+                    >
+                      <div className="text-center">
+                        <div className="font-bold text-lg">{day.dayName}</div>
+                        <div className="text-sm opacity-75 mb-3">{day.date}</div>
+                        <div className="flex justify-center mb-3">
+                          {getForecastIcon(day.weatherCode)}
+                        </div>
+                        <div className="text-sm opacity-90 mb-2">{day.condition}</div>
+                        <div className="flex justify-center gap-3 text-lg">
+                          <span className="font-semibold">{day.maxTemp}°</span>
+                          <span className="opacity-60">{day.minTemp}°</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
