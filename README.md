@@ -52,7 +52,7 @@ A modern, feature-rich weather application built with React and TypeScript that 
 
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/weather-dashboard.git
+git clone https://github.com/RahulShah1702/Weather_in_ts.git
 cd weather-dashboard
 ```
 
